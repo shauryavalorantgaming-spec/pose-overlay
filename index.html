@@ -44,42 +44,33 @@ body {
     position: absolute;
     left: 50%;
     top: 50%;
-
     width: 55%;
-
     transform: translate(-50%, -50%);
-
     opacity: 0.5;
-
     display: none;
-
     touch-action: none;
     user-select: none;
-
     max-width: none;
+    pointer-events: auto;
 }
 
 #controls {
     background: #151515;
-    padding: 10px;
-
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-
     justify-content: center;
+    align-items: center;
 }
 
 button,
 .fileButton {
     background: #292929;
     color: white;
-
     border: none;
     border-radius: 12px;
-
     padding: 11px 14px;
-
     font-size: 14px;
 }
 
@@ -94,12 +85,9 @@ input[type="file"] {
 
 .slider {
     width: 100%;
-
     display: flex;
     align-items: center;
-
     gap: 8px;
-
     font-size: 13px;
 }
 
@@ -109,21 +97,51 @@ input[type="file"] {
 
 #message {
     position: absolute;
-
     left: 50%;
     top: 50%;
-
     transform: translate(-50%, -50%);
-
     text-align: center;
-
     width: 85%;
-
     color: white;
-
     font-size: 16px;
-
     pointer-events: none;
+}
+
+/* CAPTURE BUTTON */
+#captureArea {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 0;
+}
+
+#captureButton {
+    width: 68px;
+    height: 68px;
+    padding: 0;
+    border-radius: 50%;
+    background: white;
+    border: 5px solid #777;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+#captureButton span {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #111;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 27px;
+}
+
+#captureButton:active {
+    transform: scale(0.9);
 }
 
 canvas {
@@ -169,9 +187,11 @@ canvas {
             🔄 Flip Camera
         </button>
 
-        <button id="captureButton">
-            📸 Capture
-        </button>
+        <div id="captureArea">
+            <button id="captureButton" aria-label="Capture photo">
+                <span>📷</span>
+            </button>
+        </div>
 
         <button id="resetButton">
             ↩️ Reset
@@ -207,9 +227,7 @@ canvas {
 <script>
 
 const video = document.getElementById("camera");
-
 const overlay = document.getElementById("overlay");
-
 const imageInput = document.getElementById("imageInput");
 
 const opacitySlider =
@@ -236,15 +254,11 @@ const stage =
 const canvas =
     document.getElementById("canvas");
 
-
 let currentFacingMode = "environment";
-
 let cameraStream = null;
 
 let dragging = false;
-
 let dragOffsetX = 0;
-
 let dragOffsetY = 0;
 
 
@@ -299,8 +313,10 @@ async function startCamera() {
    START CAMERA
 ========================= */
 
-if (navigator.mediaDevices &&
-    navigator.mediaDevices.getUserMedia) {
+if (
+    navigator.mediaDevices &&
+    navigator.mediaDevices.getUserMedia
+) {
 
     startCamera();
 
@@ -318,22 +334,25 @@ else {
    CHOOSE IMAGE
 ========================= */
 
-imageInput.addEventListener("change", function() {
+imageInput.addEventListener(
+    "change",
+    function() {
 
-    const file = this.files[0];
+        const file = this.files[0];
 
-    if (!file) return;
+        if (!file) return;
 
-    const imageURL =
-        URL.createObjectURL(file);
+        const imageURL =
+            URL.createObjectURL(file);
 
-    overlay.src = imageURL;
+        overlay.src = imageURL;
 
-    overlay.style.display = "block";
+        overlay.style.display = "block";
 
-    resetOverlay();
+        resetOverlay();
 
-});
+    }
+);
 
 
 /* =========================
@@ -521,20 +540,26 @@ captureButton.addEventListener(
 
         }
 
-
         canvas.width =
             video.videoWidth;
 
         canvas.height =
             video.videoHeight;
 
-
         const context =
             canvas.getContext("2d");
 
-
         /*
-         * Draw camera frame
+         * IMPORTANT:
+         *
+         * Only the camera frame is drawn.
+         *
+         * The overlay is deliberately NOT
+         * drawn onto the canvas.
+         *
+         * Therefore the pose guide stays
+         * on screen but will NOT appear
+         * in the saved photograph.
          */
 
         context.drawImage(
@@ -546,77 +571,20 @@ captureButton.addEventListener(
         );
 
 
-        /*
-         * Draw overlay
-         */
-
-        if (overlay.src &&
-            overlay.style.display !== "none") {
-
-            const stageRect =
-                stage.getBoundingClientRect();
-
-            const overlayRect =
-                overlay.getBoundingClientRect();
-
-
-            const scaleX =
-                canvas.width /
-                stageRect.width;
-
-            const scaleY =
-                canvas.height /
-                stageRect.height;
-
-
-            const x =
-                (overlayRect.left -
-                stageRect.left) *
-                scaleX;
-
-
-            const y =
-                (overlayRect.top -
-                stageRect.top) *
-                scaleY;
-
-
-            const width =
-                overlayRect.width *
-                scaleX;
-
-
-            const height =
-                overlayRect.height *
-                scaleY;
-
-
-            context.globalAlpha =
-                parseFloat(
-                    opacitySlider.value
-                );
-
-
-            context.drawImage(
-                overlay,
-                x,
-                y,
-                width,
-                height
-            );
-
-
-            context.globalAlpha = 1;
-
-        }
-
-
-        /*
-         * Save photo
-         */
+        /* =========================
+           SAVE PHOTO
+        ========================= */
 
         canvas.toBlob(
             function(blob) {
+
+                if (!blob) {
+
+                    alert("Could not create photo.");
+
+                    return;
+
+                }
 
                 const url =
                     URL.createObjectURL(blob);
@@ -629,10 +597,16 @@ captureButton.addEventListener(
                 link.download =
                     "pose-photo.jpg";
 
+                document.body.appendChild(link);
+
                 link.click();
 
+                link.remove();
+
                 setTimeout(
-                    () => URL.revokeObjectURL(url),
+                    function() {
+                        URL.revokeObjectURL(url);
+                    },
                     1000
                 );
 
