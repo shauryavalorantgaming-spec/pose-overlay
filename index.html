@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<title>Pose Overlay</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #000;
+    color: white;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+#app {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+#stage {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    background: #000;
+}
+
+#camera {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#overlay {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+
+    width: 55%;
+
+    transform: translate(-50%, -50%);
+
+    opacity: 0.5;
+
+    display: none;
+
+    touch-action: none;
+    user-select: none;
+
+    max-width: none;
+}
+
+#controls {
+    background: #151515;
+    padding: 10px;
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+
+    justify-content: center;
+}
+
+button,
+.fileButton {
+    background: #292929;
+    color: white;
+
+    border: none;
+    border-radius: 12px;
+
+    padding: 11px 14px;
+
+    font-size: 14px;
+}
+
+button:active,
+.fileButton:active {
+    transform: scale(0.96);
+}
+
+input[type="file"] {
+    display: none;
+}
+
+.slider {
+    width: 100%;
+
+    display: flex;
+    align-items: center;
+
+    gap: 8px;
+
+    font-size: 13px;
+}
+
+.slider input {
+    flex: 1;
+}
+
+#message {
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    transform: translate(-50%, -50%);
+
+    text-align: center;
+
+    width: 85%;
+
+    color: white;
+
+    font-size: 16px;
+
+    pointer-events: none;
+}
+
+canvas {
+    display: none;
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+    <div id="stage">
+
+        <video
+            id="camera"
+            autoplay
+            playsinline
+            muted>
+        </video>
+
+        <img
+            id="overlay"
+            draggable="false">
+
+        <div id="message">
+            Allow camera access to start
+        </div>
+
+    </div>
+
+    <div id="controls">
+
+        <label class="fileButton">
+            🖼️ Choose Pose
+            <input
+                id="imageInput"
+                type="file"
+                accept="image/*">
+        </label>
+
+        <button id="flipButton">
+            🔄 Flip Camera
+        </button>
+
+        <button id="captureButton">
+            📸 Capture
+        </button>
+
+        <button id="resetButton">
+            ↩️ Reset
+        </button>
+
+        <div class="slider">
+            👻 Opacity
+            <input
+                id="opacitySlider"
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.05"
+                value="0.5">
+        </div>
+
+        <div class="slider">
+            📐 Size
+            <input
+                id="sizeSlider"
+                type="range"
+                min="20"
+                max="120"
+                value="55">
+        </div>
+
+    </div>
+
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+
+const video = document.getElementById("camera");
+
+const overlay = document.getElementById("overlay");
+
+const imageInput = document.getElementById("imageInput");
+
+const opacitySlider =
+    document.getElementById("opacitySlider");
+
+const sizeSlider =
+    document.getElementById("sizeSlider");
+
+const flipButton =
+    document.getElementById("flipButton");
+
+const captureButton =
+    document.getElementById("captureButton");
+
+const resetButton =
+    document.getElementById("resetButton");
+
+const message =
+    document.getElementById("message");
+
+const stage =
+    document.getElementById("stage");
+
+const canvas =
+    document.getElementById("canvas");
+
+
+let currentFacingMode = "environment";
+
+let cameraStream = null;
+
+let dragging = false;
+
+let dragOffsetX = 0;
+
+let dragOffsetY = 0;
+
+
+/* =========================
+   CAMERA
+========================= */
+
+async function startCamera() {
+
+    try {
+
+        if (cameraStream) {
+
+            cameraStream
+                .getTracks()
+                .forEach(track => track.stop());
+
+        }
+
+        cameraStream =
+            await navigator.mediaDevices.getUserMedia({
+
+                video: {
+                    facingMode: currentFacingMode
+                },
+
+                audio: false
+
+            });
+
+        video.srcObject = cameraStream;
+
+        message.style.display = "none";
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+        message.innerHTML =
+            "📷 Camera access denied.<br><br>" +
+            "Allow camera permission and make sure " +
+            "this website is using HTTPS.";
+
+    }
+
+}
+
+
+/* =========================
+   START CAMERA
+========================= */
+
+if (navigator.mediaDevices &&
+    navigator.mediaDevices.getUserMedia) {
+
+    startCamera();
+
+}
+
+else {
+
+    message.innerHTML =
+        "Your browser does not support camera access.";
+
+}
+
+
+/* =========================
+   CHOOSE IMAGE
+========================= */
+
+imageInput.addEventListener("change", function() {
+
+    const file = this.files[0];
+
+    if (!file) return;
+
+    const imageURL =
+        URL.createObjectURL(file);
+
+    overlay.src = imageURL;
+
+    overlay.style.display = "block";
+
+    resetOverlay();
+
+});
+
+
+/* =========================
+   OPACITY
+========================= */
+
+opacitySlider.addEventListener(
+    "input",
+    function() {
+
+        overlay.style.opacity =
+            this.value;
+
+    }
+);
+
+
+/* =========================
+   SIZE
+========================= */
+
+sizeSlider.addEventListener(
+    "input",
+    function() {
+
+        overlay.style.width =
+            this.value + "%";
+
+    }
+);
+
+
+/* =========================
+   FLIP CAMERA
+========================= */
+
+flipButton.addEventListener(
+    "click",
+    function() {
+
+        currentFacingMode =
+            currentFacingMode === "environment"
+                ? "user"
+                : "environment";
+
+        startCamera();
+
+    }
+);
+
+
+/* =========================
+   RESET OVERLAY
+========================= */
+
+function resetOverlay() {
+
+    overlay.style.left = "50%";
+
+    overlay.style.top = "50%";
+
+    overlay.style.width =
+        sizeSlider.value + "%";
+
+    overlay.style.transform =
+        "translate(-50%, -50%)";
+
+}
+
+
+/* =========================
+   RESET BUTTON
+========================= */
+
+resetButton.addEventListener(
+    "click",
+    function() {
+
+        resetOverlay();
+
+        opacitySlider.value = 0.5;
+
+        sizeSlider.value = 55;
+
+        overlay.style.opacity = 0.5;
+
+    }
+);
+
+
+/* =========================
+   DRAG OVERLAY
+========================= */
+
+overlay.addEventListener(
+    "pointerdown",
+    function(event) {
+
+        dragging = true;
+
+        overlay.setPointerCapture(
+            event.pointerId
+        );
+
+        const rect =
+            overlay.getBoundingClientRect();
+
+        dragOffsetX =
+            event.clientX -
+            (rect.left + rect.width / 2);
+
+        dragOffsetY =
+            event.clientY -
+            (rect.top + rect.height / 2);
+
+    }
+);
+
+
+overlay.addEventListener(
+    "pointermove",
+    function(event) {
+
+        if (!dragging) return;
+
+        const stageRect =
+            stage.getBoundingClientRect();
+
+        const x =
+            event.clientX -
+            stageRect.left -
+            dragOffsetX;
+
+        const y =
+            event.clientY -
+            stageRect.top -
+            dragOffsetY;
+
+        overlay.style.left =
+            x + "px";
+
+        overlay.style.top =
+            y + "px";
+
+        overlay.style.transform =
+            "translate(-50%, -50%)";
+
+    }
+);
+
+
+overlay.addEventListener(
+    "pointerup",
+    function() {
+
+        dragging = false;
+
+    }
+);
+
+
+overlay.addEventListener(
+    "pointercancel",
+    function() {
+
+        dragging = false;
+
+    }
+);
+
+
+/* =========================
+   CAPTURE PHOTO
+========================= */
+
+captureButton.addEventListener(
+    "click",
+    function() {
+
+        if (!video.videoWidth) {
+
+            alert("Camera is not ready yet.");
+
+            return;
+
+        }
+
+
+        canvas.width =
+            video.videoWidth;
+
+        canvas.height =
+            video.videoHeight;
+
+
+        const context =
+            canvas.getContext("2d");
+
+
+        /*
+         * Draw camera frame
+         */
+
+        context.drawImage(
+            video,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+
+        /*
+         * Draw overlay
+         */
+
+        if (overlay.src &&
+            overlay.style.display !== "none") {
+
+            const stageRect =
+                stage.getBoundingClientRect();
+
+            const overlayRect =
+                overlay.getBoundingClientRect();
+
+
+            const scaleX =
+                canvas.width /
+                stageRect.width;
+
+            const scaleY =
+                canvas.height /
+                stageRect.height;
+
+
+            const x =
+                (overlayRect.left -
+                stageRect.left) *
+                scaleX;
+
+
+            const y =
+                (overlayRect.top -
+                stageRect.top) *
+                scaleY;
+
+
+            const width =
+                overlayRect.width *
+                scaleX;
+
+
+            const height =
+                overlayRect.height *
+                scaleY;
+
+
+            context.globalAlpha =
+                parseFloat(
+                    opacitySlider.value
+                );
+
+
+            context.drawImage(
+                overlay,
+                x,
+                y,
+                width,
+                height
+            );
+
+
+            context.globalAlpha = 1;
+
+        }
+
+
+        /*
+         * Save photo
+         */
+
+        canvas.toBlob(
+            function(blob) {
+
+                const url =
+                    URL.createObjectURL(blob);
+
+                const link =
+                    document.createElement("a");
+
+                link.href = url;
+
+                link.download =
+                    "pose-photo.jpg";
+
+                link.click();
+
+                setTimeout(
+                    () => URL.revokeObjectURL(url),
+                    1000
+                );
+
+            },
+            "image/jpeg",
+            0.92
+        );
+
+    }
+);
+
+</script>
+
+</body>
+</html>
